@@ -2,7 +2,7 @@ from typing import Union, List, Optional
 import pandas as pd
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+import matplotlib.dates as mdates
 import seaborn as sns
 
 
@@ -23,6 +23,7 @@ def decorate(
     despine: str = "top,right",
 ):
     """Decorates a matplotlib axis with common styling and formatting options.
+    Does not work well with subplot axis returned from pandas plotting functions.
 
     Parameters
     ----------
@@ -75,7 +76,6 @@ def decorate(
     - Figure size adjustment
     - Spine (border) customization
     """
-    import matplotlib.dates as mdates
     DAY_FORMAT = mdates.DateFormatter("%Y-%m-%d")
     DAY_LOCATOR = mdates.DayLocator()
     MONTH_FORMAT = mdates.DateFormatter("%Y-%m")
@@ -167,182 +167,6 @@ def _format_numeric_value(value_format, y_val):
     return formatted_value
 
 
-def bar(x: Union[pd.Series, NDArray, List], y: Union[pd.Series, NDArray, List], ax=None,
-        show_value: bool=True, value_fontsize: int=10, value_color: str='black', value_format: str=',.2f', 
-        bar_width: float=0.8, **kwargs):
-    """
-    Plot a bar chart using seaborn.
-    
-    Based on seaborn.barplot: https://seaborn.pydata.org/generated/seaborn.barplot.html
-    
-    Parameters
-    ----------
-    x : array-like
-        The x coordinates or categories for each bar.
-    y : array-like
-        The heights of each bar.
-    ax : matplotlib.axes.Axes, optional
-        The axis to plot on. If None, a new figure and axis will be created.
-    show_value : bool, default True
-        Whether to display the values on top of each bar.
-    value_fontsize : int, default 10
-        Font size for the value labels.
-    value_color : str, default 'black'
-        Color for the value labels.
-    value_format : str, default ',.2f'
-        Format string for the value labels.
-    bar_width : float, default 0.8
-        Width of the bars relative to the category width.
-    **kwargs : 
-        Additional arguments to pass to seaborn.barplot.
-    
-    Returns
-    -------
-    matplotlib.axes.Axes
-        The matplotlib axes containing the plot.
-    """
-    
-    # Create axis if not provided
-    if ax is None:
-        ax = _default_subplot()
-    
-    # Create the bar plot
-    bars = sns.barplot(x=x, y=y, ax=ax, width=bar_width, edgecolor=None, **kwargs)
-    
-    # Add value labels on top of bars if requested
-    if show_value:
-        # Get the patches (bars) from the plot
-        for i, patch in enumerate(ax.patches):
-            # Get the height of the bar
-            if isinstance(patch, mpatches.Rectangle):  # Ensure patch is a Rectangle
-                height = patch.get_height()
-            else:
-                height = 0  # Default to 0 if not a Rectangle
-            
-            # Format the value according to specified format
-            formatted_value = _format_numeric_value(value_format, height)
-            
-            # Add a text label on top of each bar
-            ax.text(
-                patch.get_x() + patch.get_width() / 2,  # X position (center of bar)
-                height / 2,  # Y position (top of bar)
-                formatted_value,  # Text to display
-                ha='center',  # Horizontal alignment
-                va='bottom',  # Vertical alignment
-                fontsize=value_fontsize,
-                color=value_color
-            )
-    
-    # Return the axis for further customization
-    return ax
-
-
-def line(x: Union[pd.Series, NDArray, List], y: Union[pd.Series, NDArray, List], ax=None,
-         marker: str='o', marker_color: str=None, line_color: str=None, line_width: float=1.5,
-         line_style: str='-', show_value: bool=False, value_fontsize: int=8, value_format: str=',.2f',
-         value_color: str="black", value_position: str='top', position_offset_x: float=0.1, position_offset_y: float=0.1, **kwargs):
-    """
-    Plot a line chart using seaborn.
-    
-    Based on seaborn.lineplot: https://seaborn.pydata.org/generated/seaborn.lineplot.html
-    
-    Parameters
-    ----------
-    x : array-like
-        The x coordinates for each point.
-    y : array-like
-        The y coordinates for each point.
-    ax : matplotlib.axes.Axes, optional
-        The axis to plot on. If None, a new figure and axis will be created.
-    marker : str, default 'o'
-        The marker style for each point.
-    line_color : str, default None
-        The color of the line. If None, uses the default matplotlib color palette.
-    marker_color : str, default None
-        The color of the markers. If None, uses the line_color or default palette.
-    line_width : float, default 1.5
-        Width of the line. If 0, the line is not displayed (only markers show).
-    line_style : str, default '-'
-        Style of the line. Options include '-', '--', '-.', ':' or '' (no line).
-    show_value : bool, default False
-        Whether to display the values at each point.
-    value_fontsize : int, default 8
-        Font size for the value labels.
-    value_format : str, default ',.2f'
-        Format string for the value labels.
-    value_position : str, default 'top'
-        Position of the labels relative to markers: 'top', 'bottom', 'left', 'right'.
-    position_offset_x : float, default 0.1
-        Horizontal offset for value labels.
-    position_offset_y : float, default 0.1
-        Vertical offset for value labels.
-    **kwargs : 
-        Additional arguments to pass to seaborn.lineplot.
-    
-    Returns
-    -------
-    matplotlib.axes.Axes
-        The matplotlib axes containing the plot.
-    """
-    
-    # Create axis if not provided
-    if ax is None:
-        ax = _default_subplot()
-    
-    # Store original x values
-    x_original = x
-    
-    # Create a range for x-axis positioning
-    x_positions = list(range(len(x)))
-    
-    # Determine if we should show the line based on line_width
-    # Use the provided line_style unless line_width is 0
-    linestyle = '' if line_width == 0 else line_style
-    
-    # Create the line plot using the positions as x-coordinates
-    # Let seaborn/matplotlib handle colors automatically if not specified
-    ax = sns.lineplot(x=x_positions, y=y, ax=ax, marker=marker, color=line_color,
-                      markerfacecolor=marker_color, markeredgecolor='none',
-                      linewidth=line_width if line_width > 0 else None,
-                      linestyle=linestyle, **kwargs)
-    
-    # Set the x-tick labels to the original x values only where y has value
-    valid_positions = []
-    valid_labels = []
-    
-    for i, (x_pos, x_orig, y_val) in enumerate(zip(x_positions, x_original, y)):
-        # Only include positions where y has a valid value (not NaN or None)
-        if pd.notna(y_val):
-            valid_positions.append(x_pos)
-            valid_labels.append(x_orig)
-    
-    # Set the ticks to show only at positions with valid y values
-    ax.set_xticks(valid_positions)
-    ax.set_xticklabels(valid_labels)
-    
-    # Add value labels if requested
-    if show_value:
-        # Determine the vertical alignment based on value_position
-        va = 'bottom' if value_position == 'top' else 'top'
-        ha = 'center'
-        # Add text labels for each point using x_positions for positioning
-        for i, (x_pos, y_val) in enumerate(zip(x_positions, y)):
-            if pd.notna(y_val):  # Only add labels for valid values
-                formatted_value = _format_numeric_value(value_format, y_val)
-                ax.text(
-                    x_pos + position_offset_x,  # X position using the range index
-                    y_val + position_offset_y,  # Y position
-                    formatted_value,   # Text to display
-                    ha=ha,             # Horizontal alignment
-                    va=va,             # Vertical alignment
-                    fontsize=value_fontsize,
-                    color=value_color
-                )
-    
-    # Return the axis for further customization
-    return ax
-
-
 def hist(x: Union[pd.Series, NDArray, List], ax=None, bins: Union[int, List, str] = 'auto',
          kde: bool = False, stat: str = 'count', show_stats: bool = False,
          mean_line: bool = False, median_line: bool = False,
@@ -409,7 +233,7 @@ def hist(x: Union[pd.Series, NDArray, List], ax=None, bins: Union[int, List, str
         ax = _default_subplot()
     
     # Create the histogram
-    sns.histplot(x=x, bins=bins, kde=kde, stat=stat, ax=ax, edgecolor=None, **kwargs)
+    sns.histplot(x=x, bins=bins, kde=kde, stat=stat, ax=ax, **kwargs)
     
     # Calculate basic statistics
     mean_val = np.nanmean(x)
@@ -528,7 +352,7 @@ def hist(x: Union[pd.Series, NDArray, List], ax=None, bins: Union[int, List, str
 
 
 def scatter(x: Union[pd.Series, NDArray, List], y: Union[pd.Series, NDArray, List], ax=None,
-           marker: str='o', size: float=50, color: Optional[str]=None, alpha: float=0.7, **kwargs):
+           marker: str='o', markersize: float=50, color: Optional[str]=None, alpha: float=0.7, **kwargs):
     """
     Plot a scatter chart using seaborn.
     
@@ -544,7 +368,7 @@ def scatter(x: Union[pd.Series, NDArray, List], y: Union[pd.Series, NDArray, Lis
         The axis to plot on. If None, a new figure and axis will be created.
     marker : str, default 'o'
         The marker style for each point.
-    size : float, default 50
+    markersize : float, default 50
         Size of the markers.
     color : str, default None
         Color of the markers. If None, uses the default matplotlib color palette.
@@ -563,7 +387,7 @@ def scatter(x: Union[pd.Series, NDArray, List], y: Union[pd.Series, NDArray, Lis
         ax = _default_subplot()
     
     # Create the scatter plot with edgecolor set to none to remove marker edges
-    sns.scatterplot(x=x, y=y, ax=ax, marker=marker, s=size, color=color, 
+    sns.scatterplot(x=x, y=y, ax=ax, marker=marker, s=markersize, color=color, 
                    alpha=alpha, edgecolor='none', **kwargs)
     
     # Return the axis for further customization

@@ -27,7 +27,7 @@ chmod +x publish.sh
 ./publish.sh
 
 # For production PyPI
-./publish.sh pypi
+./publish.sh --env pypi
 
 # Manual commands
 python -m build

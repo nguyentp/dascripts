@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dascripts"
-version = "0.1.2"
+version = "0.1.4"
 description = "Quick EDA tools for data analysis"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,8 @@ dependencies = [
     "numpy",
     "pandas",
     "seaborn",
+    "scikit-learn",
+    'xgboost',
 ]
 
 [project.optional-dependencies]
