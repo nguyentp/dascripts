@@ -1,88 +1,70 @@
-import logging
 from typing import List, Optional, Tuple, Literal
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
+from dascripts.common import get_logger
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
-def encode_ordinal(df: pd.DataFrame, cols: list, encoders: Optional[dict]=None):
-    """
-    Encodes specified columns in the DataFrame using Ordinal Encoding.
-    If encoders are provided, it will use them to transform the col in `cols`. Otherwise, using sklearn's OrdinalEncoder to fit and transform the col in `cols`.
+class DFEncoder():
+    def __init__(self, ord_cols: Optional[List[str]]=None, ohe_cols: Optional[List[str]]=None, fillna: int=-1) -> None:
+        print(f"Fill na by: {fillna}")
+        self.ord_cols = ord_cols or []
+        self.ohe_cols = ohe_cols or []
+        assert self.ord_cols or self.ohe_cols, "At least one of ord_cols or ohe_cols must be provided."
+        self.fillna_by = fillna
+        self._init_encoders()
     
-    Parameters:
+    def _init_encoders(self):
+        self.ord_encoders = {}
+        self.ohe_encoders = {}
 
-    - df: pd.DataFrame - The DataFrame to encode.
-    - cols: list - List of columns to apply Ordinal Encoding.
-    - encoders: dict, optinal, default None - A dictionary containing existing encoders, key is column name, value is OrdinalEncoder.
-        Pass a empty dictionary to `encoders` if you want to get the learned encoders.
 
-    Returns:
-    - No return. Modified DataFrame inplace with specified columns encoded.
-    """
-    # Assert that cols must be in df.columns
-    missing_cols = [col for col in cols if col not in df.columns]
-    if missing_cols:
-        raise ValueError(f"Columns {missing_cols} not found in DataFrame.")
+    def fit(self, df: pd.DataFrame):
+        """
+        Fit the encoders to the DataFrame.
+        """
+        self._init_encoders()  # Reset encoders to empty dicts
+        try:
+            for col in self.ord_cols:
+                self.ord_encoders[col] = OrdinalEncoder(unknown_value=-1, handle_unknown='use_encoded_value').fit(df[col].values.reshape(-1, 1))
+            for col in self.ohe_cols:
+                self.ohe_encoders[col] = OneHotEncoder(sparse_output=False, handle_unknown='ignore', dtype="int").fit(df[col].values.reshape(-1, 1))
+        except Exception as e:
+            logger.error(f"Error fitting DFEncoder: {e}")
+            # reset encoders to empty dicts in case of error, we clear the encoders to avoid using them later
+            self._init_encoders()
+            raise e
 
-    # Learn OrdinalEncoder for each column if not provided
-    if encoders is None or len(encoders) == 0:
-        if encoders is None:
-            encoders = {}
-        for col in cols:
-            encoders[col] = OrdinalEncoder(unknown_value=-1, handle_unknown='use_encoded_value').fit(df[col].values.reshape(-1, 1))
+        return self
     
-    # Transform the DataFrame using the encoders
-    for col in cols:
-        if col in encoders:
-            df[col] = encoders[col].transform(df[col].values.reshape(-1, 1))
-        else:
-            logger.warning(f"Column {col} not found in encoders. Skipping encoding for this column.")
 
+    def transform(self, df: pd.DataFrame):
+        """
+        Transform the DataFrame using the fitted encoders.
+        """
+        assert self.ord_encoders or self.ohe_encoders, "DFEncoder must be fitted before transforming."
 
+        df = df.copy()  # Avoid modifying the original DataFrame
+        for col in self.ord_cols:
+            df[col] = self.ord_encoders[col].transform(df[col].values.reshape(-1, 1))
+            df[col] = df[col].fillna(self.fillna_by)
+            df[col] = df[col].astype("int")  # Ensure the column is of integer type
 
-def encode_onehot(df: pd.DataFrame, cols: list, encoders: Optional[dict]=None):
-    """
-    Encodes specified columns in the DataFrame using One-Hot Encoding.
-    If encoders are provided, it will use them to transform the col in `cols`. Otherwise, using sklearn's OneHotEncoder to fit and transform the col in `cols`.
-    
-    Parameters:
-
-    - df: pd.DataFrame - The DataFrame to encode.
-    - cols: list - List of columns to apply One-Hot Encoding.
-    - encoders: dict, optinal, default None - A dictionary containing existing encoders, key is column name, value is OneHotEncoder.
-        Pass a empty dictionary to `encoders` if you want to get the learned encoders.
-
-    Returns:
-    - No return. Modified DataFrame inplace with specified columns encoded.
-    """
-    # Assert that cols must be in df.columns
-    missing_cols = [col for col in cols if col not in df.columns]
-    if missing_cols:
-        raise ValueError(f"Columns {missing_cols} not found in DataFrame.")
-
-    # Learn OneHotEncoder for each column if not provided
-    if encoders is None or len(encoders) == 0:
-        if encoders is None:
-            encoders = {}
-        for col in cols:
-            encoders[col] = OneHotEncoder(sparse_output=False, handle_unknown='ignore').fit(df[col].values.reshape(-1, 1))
-    
-    # Transform the DataFrame using the encoders
-    for col in cols:
-        if col in encoders:
-            encoder = encoders[col]
-            # Create new encoded dataframe with columns name from OneHotEncoder
+        for col in self.ohe_cols:
+            encoder = self.ohe_encoders[col]
             encoded_array = encoder.transform(df[col].values.reshape(-1, 1))
             for i, name in enumerate(encoder.get_feature_names_out()):
-                df[f"{col}_{name}"] = encoded_array[:, i]
-        else:
-            logger.warning(f"Column {col} not found in encoders. Skipping encoding for this column.")
+                name_cleaned = col + "_" + name.replace(f"x0_", "")  # remove _x0 in name b/c OHE adds _x0 prefix to the name
+                df[name_cleaned] = encoded_array[:, i]
+                df[name_cleaned] = df[name_cleaned].astype("int")  # Ensure the column is of integer type
+
+        return df
+    
 
 
-def merge(left: pd.DataFrame, right: pd.DataFrame, left_on: List[str], right_on: Optional[List[str]]=None, how: Literal["left", "right", "outer", "inner", "cross"]="inner", suffixes: Tuple[str, str]=("_left", "_right"), tag: str=None) -> pd.DataFrame:
+def merge(left: pd.DataFrame, right: pd.DataFrame, left_on: List[str], right_on: Optional[List[str]]=None, how: Literal["left", "right", "outer", "inner", "cross"]="inner", suffixes: Tuple[str, str]=("_left", "_right")) -> pd.DataFrame:
     """
     Merge two dataframes and report many details.
 
@@ -93,13 +75,10 @@ def merge(left: pd.DataFrame, right: pd.DataFrame, left_on: List[str], right_on:
         right_on (list, optional): The columns to merge on from the right dataframe. Defaults to None.
         how (str, optional): The type of merge to perform. Defaults to "inner".
         suffixes (tuple, optional): Suffixes to apply to overlapping column names. Defaults to ("_left", "_right").
-        tag (str, optional): A tag to add to the log messages for better identification. Defaults to None.
     Returns:
         pd.DataFrame: The merged dataframe.
     """
-    logger.info(f"Starting merge, tag: {tag if tag else 'No Tag'}")
-    # Edge cases:
-    # if left is empty or right is empty, no need to merge, raise an error
+    # If left is empty or right is empty, no need to merge, raise an error
     if len(left) == 0:
         raise ValueError("Left is empty")
     if len(right) == 0:
@@ -138,6 +117,7 @@ def merge(left: pd.DataFrame, right: pd.DataFrame, left_on: List[str], right_on:
     logger.info(f"Left columns: {left.columns.tolist()}")
     logger.info(f"Right columns: {right.columns.tolist()}")
     logger.info(f"Merge operation: {how.upper()}")
+
     # Log the merge comparision in format (left_col (dtype) == right_col (dtype))
     for l_col, r_col in zip(left_on, right_on):
         # Raise warning if either left column or right column has float dtype
