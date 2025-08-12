@@ -1,10 +1,10 @@
+import logging
 from typing import List, Optional, Tuple, Literal
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
-from dascripts.common import get_logger
 
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class DFEncoder():
@@ -98,9 +98,9 @@ def merge(left: pd.DataFrame, right: pd.DataFrame, left_on: List[str], right_on:
             raise ValueError(f"Columns '{l_col}' and '{r_col}' have different data types. Left: {left[l_col].dtype}, Right: {right[r_col].dtype}")
 
     # Check if merge columns are unique in both dataframes
-    if not left[left_on].drop_duplicates().shape[0] == left.shape[0]:
+    if left[left_on].drop_duplicates().shape[0] != left.shape[0]:
         logger.warning(f"Merge columns {left_on} has DUPLICATES in Left")
-    if not right[right_on].drop_duplicates().shape[0] == right.shape[0]:
+    if right[right_on].drop_duplicates().shape[0] != right.shape[0]:
         logger.warning(f"Merge columns {right_on} has DUPLICATES in Right")
 
     # Check if merge columns have null values
@@ -121,8 +121,8 @@ def merge(left: pd.DataFrame, right: pd.DataFrame, left_on: List[str], right_on:
     # Log the merge comparision in format (left_col (dtype) == right_col (dtype))
     for l_col, r_col in zip(left_on, right_on):
         # Raise warning if either left column or right column has float dtype
-        if left[l_col].dtype == "float64" or right[r_col].dtype == "float64":
-            logger.warning(f"\t{l_col} ({left[l_col].dtype}) == {r_col} ({right[r_col].dtype}) <- MERGE ON FLOAT DTYPE MIGHT CAUSE MISMATCH!")
+        if not pd.api.types.is_string_dtype(left[l_col]) or not pd.api.types.is_string_dtype(right[r_col]):
+            logger.warning(f"\t!!! {l_col} ({left[l_col].dtype}) == {r_col} ({right[r_col].dtype}) <- Try to use STRING dtype for merge columns to avoid numerical issues.")
         else:
             logger.info(f"\t{l_col} ({left[l_col].dtype}) == {r_col} ({right[r_col].dtype})")
     logger.info(f"Merge suffixes: {suffixes}")
