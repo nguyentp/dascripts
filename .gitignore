@@ -168,5 +168,4 @@ cython_debug/
 #.idea/
 
 # Project
-notebooks/
 .vscode/
