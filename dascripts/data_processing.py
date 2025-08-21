@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 class DFEncoder():
     def __init__(self, ord_cols: Optional[List[str]]=None, ohe_cols: Optional[List[str]]=None, fillna: int=-1) -> None:
-        print(f"Fill na by: {fillna}")
         self.ord_cols = ord_cols or []
         self.ohe_cols = ohe_cols or []
         assert self.ord_cols or self.ohe_cols, "At least one of ord_cols or ohe_cols must be provided."
@@ -48,6 +47,7 @@ class DFEncoder():
 
         df = df.copy()  # Avoid modifying the original DataFrame
         for col in self.ord_cols:
+            df[f"{col}_old"] = df[col]  # Keep the original column
             df[col] = self.ord_encoders[col].transform(df[col].values.reshape(-1, 1))
             df[col] = df[col].fillna(self.fillna_by)
             df[col] = df[col].astype("int")  # Ensure the column is of integer type
